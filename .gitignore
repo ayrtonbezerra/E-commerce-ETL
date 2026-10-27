@@ -1,0 +1,90 @@
+# ==========================================
+# PYTHON
+# ==========================================
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Testes e caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ==========================================
+# VARIÁVEIS DE AMBIENTE E CREDENCIAIS
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+credentials.json
+service-account*.json
+
+# ==========================================
+# JUPYTER
+# ==========================================
+
+.ipynb_checkpoints/
+
+# ==========================================
+# PYSPARK
+# ==========================================
+
+spark-warehouse/
+metastore_db/
+derby.log
+
+# ==========================================
+# DBT
+# ==========================================
+
+target/
+dbt_packages/
+logs/
+profiles.yml
+
+# ==========================================
+# AIRFLOW
+# ==========================================
+
+airflow.db
+airflow-webserver.pid
+airflow.cfg
+standalone_admin_password.txt
+
+# ==========================================
+# EDITORES
+# ==========================================
+
+.vscode/
+.idea/
+
+# ==========================================
+# SISTEMA OPERACIONAL
+# ==========================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# ARQUIVOS TEMPORÁRIOS
+# ==========================================
+
+*.log
+*.tmp
+*.bak
+*.swp
