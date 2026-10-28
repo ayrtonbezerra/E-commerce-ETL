@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "Dados de clientes"
+    columns:
+      - name: customer_id
+        description: "Id do cliente"
+        tests:
+          - not_null
+          - unique
+      - name: email
+        description: "Email dos clientes"
+        tests:
+          - not_null
+
+  - name: stg_orders
+    description: "Dados dos pedidos dos clientes"
+    columns:
+      - name: order_id
+        description: "ID do pedido"
+        tests:
+          - not_null
+          - unique
+      - name: status
+        description: "Status do pedido"
+        tests:
+          - accepted_values:
+              values: ['completo', 'cancelado']
+
+  - name: stg_products
+    description: "Produtos do catálogo"
+    columns:
+      - name: product_id
+        description: "Id do produto"
+        tests:
+          - not_null
+          - unique
+      - name: category
+        description: "Categoria do produto"
+        tests:
+          - not_null
+
+  - name: stg_order_items
+    description: "Pedidos contendo produtos e quantidades"
+    columns:
+      - name: order_id
+        description: "ID do pedido"
+        tests:
+          - not_null
+      - name: product_id
+        description: "ID do produto"
+        tests:
+          - not_null
+
+  - name: stg_cancelamentos
+    description: "Dados de pedidos cancelados"
+    columns:
+      - name: order_id
+        description: "Id do pedido"
+        tests:
+          - not_null
+          - unique

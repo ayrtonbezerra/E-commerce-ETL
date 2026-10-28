@@ -1,0 +1,44 @@
+version: 2
+
+version: 2
+
+models:
+  - name: fct_sales
+    description: "Fato de vendas, com receita e margem por item"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+
+      - name: product_id
+        tests:
+          - not_null
+
+      - name: revenue
+        description: "Receita total do item (preço * quantidade)"
+
+      - name: profit
+        description: "Lucro total do item (margem * quantidade)"
+
+  - name: dim_products
+    description: "Catálogo de produtos com dados de precificação"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+
+      - name: margin
+        description: "Margem unitária (preço - custo)"
+
+  - name: dim_customer
+    description: "Clientes com dados de comportamento e churn"
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: is_churned
+        tests:
+          - accepted_values:
+              values: [0, 1]
