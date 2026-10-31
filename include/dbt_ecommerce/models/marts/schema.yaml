@@ -1,7 +1,5 @@
 version: 2
 
-version: 2
-
 models:
   - name: fct_sales
     description: "Fato de vendas, com receita e margem por item"
@@ -38,7 +36,7 @@ models:
         tests:
           - not_null
           - unique
-      - name: is_churned
+      - name: is_churn
         tests:
           - accepted_values:
               values: [0, 1]

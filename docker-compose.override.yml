@@ -1,0 +1,15 @@
+services:
+  ecommerce-db:
+    image: postgres:17
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: ecommerce_user
+    volumes:
+      - ecommerce_data:/var/lib/postgresql/data
+    networks:
+      - airflow
+
+volumes:
+  ecommerce_data:

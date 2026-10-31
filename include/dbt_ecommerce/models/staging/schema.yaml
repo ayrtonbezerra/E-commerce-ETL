@@ -4,7 +4,7 @@ models:
   - name: stg_customers
     description: "Dados de clientes"
     columns:
-      - name: customer_id
+      - name: id
         description: "Id do cliente"
         tests:
           - not_null

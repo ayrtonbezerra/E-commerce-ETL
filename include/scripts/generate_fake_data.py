@@ -21,6 +21,7 @@ N_CUSTOMERS = int(os.getenv('N_CUSTOMERS'))
 N_PRODUCTS = int(os.getenv('N_PRODUCTS'))
 N_ORDERS = int(os.getenv('N_ORDERS'))
 OUTPUT_PATH = Path(os.getenv('OUTPUT_PATH'))
+OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
 
 #-------------------- 1. Clientes --------------------
 
@@ -60,9 +61,9 @@ for prod_id in range(1, N_PRODUCTS+1):
         }
     )
 
-    df_products = pd.DataFrame(products)
+df_products = pd.DataFrame(products)
 
-    df_products.to_csv(OUTPUT_PATH/'products.csv', index=False)
+df_products.to_csv(OUTPUT_PATH/'products.csv', index=False)
 
 #-------------------- 3. Pedidos --------------------
 
