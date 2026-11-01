@@ -1,63 +1,96 @@
-version: 2
+version: 3
 
 models:
   - name: stg_customers
-    description: "Dados de clientes"
+    description: "Dados tratados de clientes"
     columns:
       - name: id
-        description: "Id do cliente"
-        tests:
-          - not_null
+        data_tests:
           - unique
+          - not_null
+
+      - name: name
+        data_tests:
+          - not_null
+
       - name: email
-        description: "Email dos clientes"
-        tests:
+        data_tests:
+          - not_null
+
+  - name: stg_products
+    description: "Dados tratados de produtos"
+    columns:
+      - name: product_id
+        data_tests:
+          - unique
+          - not_null
+
+      - name: price
+        data_tests:
+          - not_null
+
+      - name: cost
+        data_tests:
           - not_null
 
   - name: stg_orders
-    description: "Dados dos pedidos dos clientes"
+    description: "Dados tratados de pedidos"
     columns:
       - name: order_id
-        description: "ID do pedido"
-        tests:
-          - not_null
+        data_tests:
           - unique
+          - not_null
+
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: id
+
       - name: status
-        description: "Status do pedido"
-        tests:
+        data_tests:
+          - not_null
           - accepted_values:
               values: ['completo', 'cancelado']
 
-  - name: stg_products
-    description: "Produtos do catálogo"
+  - name: stg_order_items
+    description: "Itens associados aos pedidos"
     columns:
-      - name: product_id
-        description: "Id do produto"
-        tests:
-          - not_null
+      - name: order_item_id
+        data_tests:
           - unique
-      - name: category
-        description: "Categoria do produto"
-        tests:
           - not_null
 
-  - name: stg_order_items
-    description: "Pedidos contendo produtos e quantidades"
-    columns:
       - name: order_id
-        description: "ID do pedido"
-        tests:
+        data_tests:
           - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
+
       - name: product_id
-        description: "ID do produto"
-        tests:
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
+
+      - name: quantity
+        data_tests:
           - not_null
 
   - name: stg_cancelamentos
-    description: "Dados de pedidos cancelados"
+    description: "Cancelamentos de pedidos"
     columns:
       - name: order_id
-        description: "Id do pedido"
-        tests:
-          - not_null
+        data_tests:
           - unique
+          - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
+
+      - name: cancel_date
+        data_tests:
+          - not_null
