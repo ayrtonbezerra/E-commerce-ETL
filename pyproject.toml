@@ -14,3 +14,9 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "seaborn>=0.13.2",
 ]
+
+[dependency-groups]
+dev = [
+    "psycopg[binary]>=3.2,<4",
+    "pytest>=9.2.0",
+]
