@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: ecommerce_raw
+    schema: raw
+    description: Dados originais de e-commerce ingeridos por Python no PostgreSQL.
+    tables:
+      - name: customers
+      - name: products
+      - name: orders
+      - name: order_items
+      - name: cancelamentos

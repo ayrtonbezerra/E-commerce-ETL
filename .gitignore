@@ -53,3 +53,5 @@ desktop.ini
 *.tmp
 *.bak
 *.swp
+
+/include/data/
