@@ -22,7 +22,7 @@ jobs:
       DBT_DATABASE: ecommerce
       DBT_SCHEMA: analytics
 
-      OUTPUT_PATH: ${{ runner.temp }}/ecommerce_data
+      OUTPUT_PATH: /tmp/ecommerce_data
       N_CUSTOMERS: "30"
       N_PRODUCTS: "15"
       N_ORDERS: "50"
