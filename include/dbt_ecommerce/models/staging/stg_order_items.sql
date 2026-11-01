@@ -8,6 +8,7 @@ WITH source as (
 
 renamed as(
     SELECT
+        order_item_id,
         order_id,
         product_id,
         CAST(quantity AS NUMERIC) as quantity

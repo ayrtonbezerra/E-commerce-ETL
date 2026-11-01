@@ -51,7 +51,6 @@ def generate_batch(run_id: str, run_date: date) -> Path:
                 raise FileNotFoundError(f"CSV faltando no lote finalizado: {name}")
         print(f"[REPLAY] Reutilizando lote já gerado: {batch_path}")
     else:
-
         base_fake = Faker("pt_BR")
         base_fake.seed_instance(42)
         customers_rng = random.Random(42)
@@ -84,7 +83,6 @@ def generate_batch(run_id: str, run_date: date) -> Path:
                 }
             )
         pd.DataFrame(products).to_csv(batch_path / "products.csv", index=False)
-
 
         batch_number = int(batch_hash[:10], 16) + 1
         order_start = batch_number * ORDER_ID_STRIDE
@@ -148,6 +146,7 @@ def generate_batch(run_id: str, run_date: date) -> Path:
             "batch_key": batch_hash[:16],
             "counts": {"customers": len(customers), "products": len(products), "orders": len(orders), "order_items": len(order_items), "cancelamentos": len(cancelamentos)},
         }
+
         tmp_manifest = manifest_path.with_suffix(".tmp")
         tmp_manifest.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp_manifest.replace(manifest_path)
