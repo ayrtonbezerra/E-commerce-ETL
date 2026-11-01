@@ -1,0 +1,113 @@
+name: CI - E-commerce ETL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python and dbt tests
+    runs-on: ubuntu-latest
+
+    env:
+      DBT_HOST: "127.0.0.1"
+      DBT_PORT: "5432"
+      DBT_USER: ecommerce_user
+      DBT_ENV_SECRET_PASSWORD: ci_only_password
+      DBT_DATABASE: ecommerce
+      DBT_SCHEMA: analytics
+
+      OUTPUT_PATH: ${{ runner.temp }}/ecommerce_data
+      N_CUSTOMERS: "30"
+      N_PRODUCTS: "15"
+      N_ORDERS: "50"
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: ecommerce
+          POSTGRES_USER: ecommerce_user
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ecommerce_user -d ecommerce"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11
+        run: uv python install 3.11.9
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run Pytest
+        run: uv run --no-sync pytest tests/units -v
+
+      - name: Create dbt profile
+        run: |
+          mkdir -p "$RUNNER_TEMP/dbt_profiles"
+
+          cat > "$RUNNER_TEMP/dbt_profiles/profiles.yml" <<'EOF'
+          dbt_ecommerce:
+            target: ci
+            outputs:
+              ci:
+                type: postgres
+                host: "{{ env_var('DBT_HOST') }}"
+                port: 5432
+                user: "{{ env_var('DBT_USER') }}"
+                password: "{{ env_var('DBT_ENV_SECRET_PASSWORD') }}"
+                dbname: "{{ env_var('DBT_DATABASE') }}"
+                schema: "{{ env_var('DBT_SCHEMA') }}"
+                threads: 2
+          EOF
+
+      - name: Verify dbt connection
+        run: |
+          uv run --no-sync dbt debug \
+            --project-dir include/dbt_ecommerce \
+            --profiles-dir "$RUNNER_TEMP/dbt_profiles"
+
+      - name: Generate sample data
+        run: |
+          uv run --no-sync python \
+            include/scripts/generate_fake_data.py \
+            --run-id "ci-batch" \
+            --run-date "2026-11-01"
+
+      - name: Load raw tables
+        run: |
+          for table in customers products orders order_items cancelamentos; do
+            uv run --no-sync python \
+              include/scripts/load_data.py "$table" \
+              --run-id "ci-batch"
+          done
+
+      - name: Build dbt models
+        run: |
+          uv run --no-sync dbt run \
+            --project-dir include/dbt_ecommerce \
+            --profiles-dir "$RUNNER_TEMP/dbt_profiles"
+
+      - name: Run dbt tests
+        run: |
+          uv run --no-sync dbt test \
+            --project-dir include/dbt_ecommerce \
+            --profiles-dir "$RUNNER_TEMP/dbt_profiles"
