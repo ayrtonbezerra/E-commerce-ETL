@@ -1,230 +1,105 @@
+# E-commerce Customer Retention Analytics Pipeline
 
-# E-Commerce Analytics Pipeline
+[![CI - E-commerce ETL](https://github.com/ayrtonbezerra/ecommerce-customer-retention-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/ayrtonbezerra/ecommerce-customer-retention-pipeline/actions/workflows/ci.yml)
 
-[![CI - E-commerce ETL](https://github.com/ayrtonbezerra/E-commerce-ETL/actions/workflows/ci.yml/badge.svg)](https://github.com/ayrtonbezerra/E-commerce-ETL/actions/workflows/ci.yml)
+**An end-to-end analytics engineering project that automates weekly customer retention monitoring using Python, PostgreSQL, dbt, and Apache Airflow.**
 
-An end-to-end batch data pipeline built with **Python, PostgreSQL, dbt, and Apache Airflow**, featuring incremental ingestion, idempotent processing, automated data quality checks, and continuous integration.
+## Overview
 
-This project demonstrates practical analytics engineering concepts through a simulated e-commerce environment. It covers the full lifecycle from source data generation and ingestion to SQL transformations, data validation, and workflow orchestration.
+Customer retention is a critical challenge for e-commerce businesses. Without consistent monitoring, companies may fail to identify customers who have stopped purchasing or those who are approaching inactivity thresholds.
+
+This project simulates an e-commerce environment and builds an automated data pipeline that transforms transactional data into actionable customer retention insights.
+
+Every week, the pipeline can generate a report answering questions such as:
+
+- How many customers are active, at risk, or churned?
+- How has customer inactivity changed over the past eight weeks?
+- Which customers should be prioritized for reactivation?
+- How does current order activity compare with the previous week?
+
+The solution covers the full analytics lifecycle, from data ingestion and transformation to quality testing, orchestration, and automated reporting.
+
+**All customer and transaction data is synthetic.** Churn is defined using an inactivity-based business rule rather than a predictive machine learning model.
 
 ## Key Features
 
-- **Incremental ingestion:** New orders and order items are appended without replacing previously ingested records.
-- **Idempotent processing:** Reprocessing the same batch does not create duplicate records or unnecessary updates.
-- **Reproducible data generation:** Deterministic synthetic datasets are generated using Faker and identified by Airflow's `run_id`.
-- **SQL transformations with dbt:** Raw data is standardized and transformed into analytics-ready models.
-- **Automated data quality:** Generic and custom dbt tests enforce data integrity and business rules.
-- **Python testing:** Pytest validates data generation, identifier uniqueness, referential consistency, and input validation.
-- **Continuous integration:** GitHub Actions executes automated tests against a temporary PostgreSQL database.
+- **Automated weekly reporting:** Airflow orchestrates data generation, ingestion, transformation, validation, and reporting.
+- **Incremental ingestion:** New orders accumulate in PostgreSQL without replacing previously loaded transactions.
+- **Idempotent processing:** Reprocessing an existing batch does not duplicate records.
+- **Historical data simulation:** Faker generates a historical customer population with different purchasing behaviors.
+- **Customer retention analytics:** dbt models classify customers and reconstruct eight weeks of retention metrics.
+- **Automated data quality:** dbt and Pytest validate data integrity, business rules, and Python logic.
+- **Continuous integration:** GitHub Actions runs automated tests against a temporary PostgreSQL instance.
+- **Flexible reporting:** Reports are saved locally as Markdown and can optionally be sent through Telegram.
+
+## Architecture
+
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    A["Python + Faker<br/>Synthetic data generation"]
-    B["CSV batches<br/>run_id + manifest"]
-    C["Python ingestion<br/>COPY + UPSERT"]
-    D[("PostgreSQL<br/>raw schema")]
-    E["dbt staging<br/>Cleaning and standardization"]
-    F["dbt intermediate<br/>Customer activity and churn features"]
-    G["dbt data quality tests"]
+flowchart TB
+    subgraph AIRFLOW["Apache Airflow — Pipeline Orchestration"]
+        direction LR
+        A["1. Historical Bootstrap<br/>Python + Faker"]
+        B["2. Weekly Data Generation<br/>Python + Faker"]
+        C["3. Incremental Ingestion<br/>Python + COPY / UPSERT"]
+        D["4. Data Transformation<br/>dbt run"]
+        E["5. Data Quality<br/>dbt test"]
+        F["6. Retention Reporting<br/>Python"]
 
-    A --> B --> C --> D --> E --> F
-    E --> G
-    F --> G
+        A --> B --> C --> D --> E --> F
+    end
 
-    H["Apache Airflow<br/>Orchestration"] -.-> A
-    H -.-> C
-    H -.-> E
-    H -.-> G
+    subgraph STORAGE["PostgreSQL — Data Storage"]
+        direction LR
+        RAW[("raw schema<br/>Source Tables")]
+        ANALYTICS[("analytics schema<br/>Staging + Retention Models")]
+    end
 
-    I["GitHub Actions CI"] -.-> J["Pytest + PostgreSQL + dbt"]
+    A -->|"Historical records"| RAW
+    C -->|"New transactions"| RAW
+    RAW -->|"dbt sources"| D
+    D -->|"Build models"| ANALYTICS
+    ANALYTICS -.->|"Validate"| E
+    ANALYTICS -->|"Query metrics"| F
+
+    F --> MD["Markdown Report"]
+    F -.->|"Optional"| TG["Telegram Notification"]
+
+    subgraph CI["GitHub Actions — Independent CI"]
+        direction LR
+        PY["Pytest"] --> PG["Temporary PostgreSQL"]
+        PG --> DBT["dbt run + dbt test"]
+        DBT --> CR["Retention Report Validation"]
+    end
 ```
 
-Airflow orchestrates the local pipeline using the Astro CLI. The DAG is configured for weekly execution, with retries and controlled task dependencies.
+**Apache Airflow** orchestrates the complete workflow using the Astro CLI and Docker. **GitHub Actions** independently validates the pipeline in a clean environment.
 
-GitHub Actions independently validates the code and SQL models in a clean environment.
+## Quick Start
 
-## Tech Stack
-
-| Technology | Purpose |
-|---|---|
-| Python | Synthetic data generation and ingestion |
-| Faker | Realistic synthetic customers, products, and transactions |
-| PostgreSQL 17 | Relational storage for raw and transformed data |
-| psycopg | PostgreSQL connectivity and bulk loading |
-| dbt Core | SQL transformations, model dependencies, and data quality |
-| Apache Airflow | Workflow orchestration and task scheduling |
-| Astro CLI / Docker | Local containerized Airflow environment |
-| Pytest | Automated Python tests |
-| GitHub Actions | Continuous integration |
-| uv | Python dependency management |
-
-## Pipeline Design
-
-### 1. Synthetic Data Generation
-
-The pipeline generates five datasets:
-
-| Dataset | Description |
-|---|---|
-| `customers` | Customer information and registration dates |
-| `products` | Product catalog, categories, prices, and costs |
-| `orders` | Orders, associated customers, dates, and statuses |
-| `order_items` | Products and quantities associated with each order |
-| `cancelamentos` | Order cancellation reasons and dates |
-
-Each Airflow execution is associated with a unique `run_id`.
-
-The generator uses deterministic random seeds and derives batch-specific identifiers from the `run_id`. Generated CSV files and a manifest are stored in a dedicated directory for each batch.
-
-When an existing batch is requested again, the generator reuses its previously generated files.
-
-### 2. Incremental and Idempotent Ingestion
-
-The ingestion process uses PostgreSQL's `COPY` command and `INSERT ... ON CONFLICT` to load records efficiently.
-
-The workflow for each table is:
-
-1. Validate the batch manifest and CSV header.
-2. Load the CSV into a temporary PostgreSQL table using `COPY`.
-3. Insert new records into the `raw` schema.
-4. Update existing records only when their values have changed.
-5. Commit the transaction.
-
-The core approach follows this SQL pattern:
-
-```sql
-INSERT INTO raw.orders (...)
-SELECT ...
-FROM staging_table
-ON CONFLICT (order_id)
-DO UPDATE SET ...
-WHERE (...) IS DISTINCT FROM (...);
-```
-
-This design addresses two different requirements:
-
-**Incrementality:** New transactional records accumulate across successive pipeline executions.
-
-**Idempotency:** Reprocessing an identical batch leaves the target table unchanged.
-
-Customer and product datasets currently behave as stable snapshots, while orders and order items are generated as new transactional batches.
-
-The ingestion strategy was validated by reprocessing an existing batch and confirming that no records were inserted or updated. A subsequent execution added exactly the configured number of new orders without removing historical records.
-
-### 3. Data Transformation with dbt
-
-The project separates ingestion from transformation.
-
-**Raw layer — `raw` schema**
-
-Stores the datasets ingested by Python. dbt references these tables through source definitions.
-
-**Staging layer — `analytics` schema**
-
-The staging models standardize raw data through type casting, string normalization, and field selection:
-
-- `stg_customers`
-- `stg_products`
-- `stg_orders`
-- `stg_order_items`
-- `stg_cancelamentos`
-
-These models are materialized as views.
-
-**Intermediate layer**
-
-The `int_churn_prediction_data` model aggregates customer order activity, including:
-
-- Total number of orders
-- First and most recent order dates
-- Cancellation count
-- Activity period
-- A rule-based churn indicator
-
-The churn indicator identifies customers whose most recent order was more than 90 days ago. It is a heuristic business rule, not a trained machine learning model.
-
-The current dbt transformations use regular model materializations; incremental processing is implemented in the ingestion layer.
-
-## Data Quality and Testing
-
-The project uses two complementary testing strategies.
-
-### dbt Tests
-
-Generic tests validate fundamental data integrity:
-
-- `unique` for primary identifiers
-- `not_null` for required fields
-- `relationships` for referential integrity
-- `accepted_values` for valid order statuses
-
-Custom SQL tests validate business rules, including:
-
-- Order item quantities must be positive.
-- Product prices must be positive and costs nonnegative.
-- Cancellation records must reference canceled orders.
-- Cancellation dates cannot precede order dates.
-
-A dbt test fails when its validation query returns records that violate the corresponding rule.
-
-### Pytest
-
-Four automated Python tests cover:
-
-| Test | Purpose |
-|---|---|
-| Batch reproducibility | Verify that the same `run_id` produces identical data |
-| Identifier uniqueness | Verify that different batches do not share order or order-item IDs |
-| Generated data integrity | Validate relationships between generated entities |
-| Input validation | Reject CSV files with invalid headers before database access |
-
-Tests use temporary directories and mocks to avoid modifying production-like data during unit testing.
-
-An integration test against PostgreSQL for the UPSERT behavior remains a possible future improvement.
-
-## Continuous Integration
-
-The GitHub Actions workflow runs automatically on pushes and pull requests targeting `main`.
-
-The CI pipeline performs the following steps:
-
-1. Set up Python 3.11 and install dependencies using uv.
-2. Execute the Pytest suite.
-3. Start a temporary PostgreSQL 17 service.
-4. Generate synthetic e-commerce data.
-5. Ingest all five datasets into PostgreSQL.
-6. Execute `dbt run`.
-7. Execute `dbt test`, including generic and custom SQL tests.
-
-A failure in any step causes the CI job to fail.
-
-[View the CI workflow and execution history](https://github.com/ayrtonbezerra/E-commerce-ETL/actions/workflows/ci.yml)
-
-This project implements continuous integration, not automated production deployment.
-
-## Getting Started
+You can run the entire pipeline through the Airflow web interface. No external data sources, cloud accounts, or Telegram credentials are required.
 
 ### Prerequisites
 
-- Docker Desktop with Linux containers
-- Astronomer Astro CLI
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Linux containers enabled
+- [Astronomer Astro CLI](https://www.astronomer.io/docs/astro/cli/get-started-cli/)
 - Git
-- Python 3.11 and uv (for local Python development and tests)
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/ayrtonbezerra/E-commerce-ETL.git
-cd E-commerce-ETL
+git clone https://github.com/ayrtonbezerra/ecommerce-customer-retention-pipeline.git
+cd ecommerce-customer-retention-pipeline
 ```
 
-### 2. Configure environment variables
+### 2. Configure the environment
 
-Create a `.env` file in the repository root:
+Create a `.env` file in the project root with the following configuration:
 
 ```dotenv
+# PostgreSQL
 POSTGRES_PASSWORD=your_local_password
 
 DBT_HOST=ecommerce-db
@@ -234,23 +109,21 @@ DBT_ENV_SECRET_PASSWORD=your_local_password
 DBT_DATABASE=ecommerce
 DBT_SCHEMA=analytics
 
+# Container paths
 SCRIPT_PATH=/usr/local/airflow/include/scripts
 DBT_PROJECT_DIR=/usr/local/airflow/include/dbt_ecommerce
 DBT_PROFILES_DIR=/usr/local/airflow/include/dbt_ecommerce
 OUTPUT_PATH=/usr/local/airflow/include/data
 
+# Synthetic data volume
 N_CUSTOMERS=100
 N_PRODUCTS=50
 N_ORDERS=200
 ```
 
-Use the same password for `POSTGRES_PASSWORD` and `DBT_ENV_SECRET_PASSWORD`.
+Replace `your_local_password` with your chosen password, keeping both password values identical.
 
-The `.env` file is excluded from Git to prevent accidental credential exposure.
-
-### 3. Configure the dbt profile
-
-Create `include/dbt_ecommerce/profiles.yml`:
+Next, create `include/dbt_ecommerce/profiles.yml`:
 
 ```yaml
 dbt_ecommerce:
@@ -267,92 +140,350 @@ dbt_ecommerce:
       threads: 2
 ```
 
-The profile is excluded from version control. GitHub Actions generates its own temporary dbt profile.
+Both files are excluded from Git to avoid exposing local credentials.
 
-### 4. Start the environment
+### 3. Start the environment
+
+From the project root, run:
 
 ```bash
 astro dev start
 ```
 
-The Airflow interface is available at:
+Astro CLI builds and starts the local Airflow environment and PostgreSQL service.
 
-`http://localhost:8080`
+Open the Airflow interface:
 
-The e-commerce PostgreSQL instance is also accessible from the host at `localhost:5433`.
+**http://localhost:8080**
 
-### 5. Run the core pipeline manually
+### 4. Run the pipeline
 
-Open a shell inside the Astro environment:
+In the Airflow interface:
 
-```bash
-astro dev bash
+1. Navigate to **Dags**.
+2. Find `ecommerce_analytics_dag`.
+3. Enable the DAG if it is paused.
+4. Click **Trigger DAG** to start a manual execution.
+5. Monitor each task in the Grid or Graph view.
+
+The workflow executes the following tasks:
+
+```text
+bootstrap_history
+       |
+generate_fake_data
+       |
+load_customers
+       |
+load_products
+       |
+load_orders
+       |
+load_order_items
+       |
+load_cancelamentos
+       |
+    dbt_run
+       |
+    dbt_test
+       |
+ generate_report
 ```
 
-Generate a sample batch:
+The historical bootstrap is idempotent, so subsequent executions reuse the existing historical dataset instead of duplicating it.
 
-```bash
-python /usr/local/airflow/include/scripts/generate_fake_data.py \
-  --run-id "demo-batch-001" \
-  --run-date "2026-11-01"
+New executions generate additional transactional batches.
+
+### 5. View the report
+
+After the DAG finishes successfully, open:
+
+```text
+include/reports/latest_report.md
 ```
 
-Ingest the generated datasets:
+If you are using VS Code, press `Ctrl + Shift + V` to preview the formatted Markdown report.
 
-```bash
-for table in customers products orders order_items cancelamentos; do
-  python /usr/local/airflow/include/scripts/load_data.py \
-    "$table" --run-id "demo-batch-001"
-done
+Each execution also saves a separate report under:
+
+```text
+include/reports/batches/
 ```
 
-Run the dbt transformations and tests:
+The reports include customer retention metrics, weekly activity, historical retention trends, and a prioritized list of customers for potential reactivation.
 
-```bash
-/usr/local/airflow/dbt_venv/bin/dbt run \
-  --project-dir /usr/local/airflow/include/dbt_ecommerce \
-  --profiles-dir /usr/local/airflow/include/dbt_ecommerce
+**Telegram is optional.** The local Markdown report is generated even when Telegram is not configured.
 
-/usr/local/airflow/dbt_venv/bin/dbt test \
-  --project-dir /usr/local/airflow/include/dbt_ecommerce \
-  --profiles-dir /usr/local/airflow/include/dbt_ecommerce
+### Optional: Enable Telegram notifications
+
+To receive the report automatically, create your own Telegram bot through [@BotFather](https://t.me/BotFather) and obtain the destination chat ID.
+
+Add the following variables to your `.env`:
+
+```dotenv
+TELEGRAM_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
 ```
 
-The Airflow DAG is named `ecommerce_analytics_dag`. It also includes a Telegram reporting task that requires additional configuration, as described under Known Limitations.
+After restarting the Astro environment, subsequent successful DAG executions will also send the retention summary to your configured Telegram chat.
 
-### 6. Run Python tests
+Without these variables, the DAG simply generates the local report.
 
-From the repository root, with uv installed:
+## Customer Retention Analytics
+
+The analytical models classify customers according to the time elapsed since their most recent completed order.
+
+| Customer Segment | Definition |
+|---|---|
+| Active | Purchased within the last 60 days |
+| At Risk | Last completed purchase was 61–90 days ago |
+| Churned | More than 90 days since the last completed purchase |
+| Never Purchased | Registered but has no completed orders |
+
+Canceled orders do not count as completed purchases when calculating customer inactivity.
+
+### Weekly Retention Report
+
+The report contains four main sections.
+
+**Customer Retention Snapshot**
+
+Provides the current number of registered customers, customers with purchase history, churned customers, and customers at risk.
+
+The churned buyer share is calculated as:
+
+```text
+Churned Buyer Share =
+    Churned Customers / Customers with Completed Purchases
+```
+
+**Weekly Order Activity**
+
+Summarizes orders, purchasing customers, cancellations, and changes in order volume compared with the preceding seven days.
+
+**Eight-Week Retention Trend**
+
+Shows the evolution of active, at-risk, and churned customer populations across eight weekly reference dates.
+
+These historical classifications are reconstructed from transaction dates rather than stored as independent weekly snapshots.
+
+**Reactivation Opportunities**
+
+Identifies customers approaching the 90-day inactivity threshold and prioritizes them based on historical purchase frequency.
+
+This provides a starting point for potential customer reactivation campaigns.
+
+> **Important:** The churn metric is a rule-based inactivity indicator. It does not represent a trained churn prediction model, and the synthetic results should not be interpreted as real business performance.
+
+## Data Pipeline Design
+
+### Synthetic Data Generation
+
+Python and Faker simulate five e-commerce datasets:
+
+| Dataset | Description |
+|---|---|
+| `customers` | Customer information and registration dates |
+| `products` | Product catalog, prices, costs, and categories |
+| `orders` | Order dates, customers, and statuses |
+| `order_items` | Products and quantities associated with orders |
+| `cancelamentos` | Cancellation dates and reasons |
+
+The generator supports two execution modes:
+
+- **Historical bootstrap:** Creates an initial population with purchasing histories spanning several months, including active, at-risk, and churned customers.
+- **Incremental batches:** Simulates newly arriving transactions for subsequent pipeline executions.
+
+Each batch is associated with a reproducible identifier derived from the Airflow `run_id`. Generated CSVs are stored with a manifest, allowing an existing batch to be replayed without regenerating different data.
+
+### Incremental and Idempotent Ingestion
+
+The ingestion layer is implemented in Python using `psycopg` and PostgreSQL.
+
+Instead of relying on `dbt seed` for operational ingestion, the pipeline loads source data directly into the `raw` schema.
+
+The ingestion strategy follows three steps:
+
+1. Validate the source CSV and load it into a temporary table using PostgreSQL `COPY`.
+2. Merge records into the target table using `INSERT ... ON CONFLICT`.
+3. Insert new records and update existing records only when their values have changed.
+
+For example, an existing order can be updated without creating a duplicate, while newly generated orders are added to the accumulated dataset.
+
+**Idempotency** ensures that processing the same batch repeatedly produces the same final state.
+
+**Incrementality** allows new transactional batches to be added without rebuilding the entire raw dataset.
+
+These behaviors were validated through repeated batch ingestion and additional DAG executions.
+
+### SQL Transformations with dbt
+
+dbt separates raw ingestion from analytics modeling.
+
+| Layer | Purpose |
+|---|---|
+| `raw` | Source tables loaded by Python |
+| `staging` | Standardization, field selection, and type casting |
+| `intermediate` | Customer activity, churn classification, and weekly retention metrics |
+
+The staging models are:
+
+- `stg_customers`
+- `stg_products`
+- `stg_orders`
+- `stg_order_items`
+- `stg_cancelamentos`
+
+The main analytical models include:
+
+**`int_churn_prediction_data`**
+
+Aggregates completed purchases and cancellations by customer, calculates purchase activity dates, and derives a rule-based churn indicator.
+
+Despite its name, this model does not train or execute a predictive machine learning algorithm.
+
+**`int_weekly_retention`**
+
+Reconstructs eight weekly snapshots of customer activity and classifies customers into active, at-risk, churned, and never-purchased segments.
+
+The dbt models are materialized as views. Incremental processing is implemented in the ingestion layer rather than through dbt incremental materializations.
+
+## Data Quality and Automated Testing
+
+The pipeline uses two complementary testing approaches.
+
+### dbt Tests
+
+Generic dbt tests validate:
+
+- Unique identifiers and required fields
+- Referential integrity between customers, orders, products, and order items
+- Accepted order statuses
+
+Custom SQL tests enforce business rules, including:
+
+- Positive order item quantities
+- Valid product prices and costs
+- Consistent order cancellation statuses
+- Valid cancellation dates
+- Consistency between weekly retention segments and their corresponding customer populations
+
+Airflow executes `dbt test` before generating the retention report. If a data quality test fails, the downstream reporting task is not executed.
+
+### Pytest
+
+The Python test suite validates:
+
+- Reproducibility of generated batches
+- Identifier uniqueness across different batches
+- Referential integrity of synthetic transactions
+- Rejection of CSVs with invalid headers
+- Generation of historical customer retention segments
+
+The tests use temporary directories and mocks to avoid modifying the local PostgreSQL database.
+
+To run the Python tests manually, install [uv](https://docs.astral.sh/uv/) and execute:
 
 ```bash
 uv sync --locked
 uv run pytest tests/units -v
 ```
 
-### 7. Inspect the results
+## Continuous Integration
 
-Connect to the PostgreSQL database using a client such as DBeaver.
+GitHub Actions automatically validates changes pushed to `main` and pull requests targeting that branch.
 
-Example query:
+The CI workflow:
+
+1. Sets up Python and installs project dependencies.
+2. Executes Pytest.
+3. Starts a temporary PostgreSQL 17 instance.
+4. Generates and ingests historical and incremental synthetic data.
+5. Builds the dbt models.
+6. Executes dbt data quality tests.
+7. Generates the retention report without requiring Telegram credentials.
+
+This ensures that the pipeline can be tested in an independent environment rather than relying exclusively on a developer's local setup.
+
+[View GitHub Actions workflow](https://github.com/ayrtonbezerra/ecommerce-customer-retention-pipeline/actions/workflows/ci.yml)
+
+## Optional: Validate Incrementality and Idempotency
+
+The following checks allow you to inspect the ingestion behavior directly.
+
+### Incrementality
+
+After a successful DAG execution, connect to PostgreSQL using a SQL client such as DBeaver.
+
+Connection details:
+
+| Field | Value |
+|---|---|
+| Host | `localhost` |
+| Port | `5433` |
+| Database | `ecommerce` |
+| Username | `ecommerce_user` |
+| Password | Value of `POSTGRES_PASSWORD` |
+
+Run:
 
 ```sql
-SELECT
-    status,
-    COUNT(*) AS total_orders
-FROM analytics.stg_orders
-GROUP BY status
-ORDER BY total_orders DESC;
+SELECT COUNT(*) AS total_orders
+FROM raw.orders;
 ```
 
-You can also explore the models under the `analytics` schema.
+Record the result, then trigger another DAG execution through Airflow.
 
-## Project Structure
+Run the same query again. The number of orders should increase by the configured `N_ORDERS`, while previous records remain available.
+
+### Idempotency
+
+In Airflow, open a completed DAG Run and copy its **Run ID**.
+
+Open an Astro shell:
+
+```bash
+astro dev bash
+```
+
+Reprocess the same order batch using its original Run ID:
+
+```bash
+python /usr/local/airflow/include/scripts/load_data.py orders --run-id "YOUR_RUN_ID"
+```
+
+The expected result for an unchanged, already-loaded batch is:
+
+```text
+0 inserted/updated
+```
+
+The total number of orders in PostgreSQL should remain unchanged.
+
+This demonstrates that reprocessing an existing batch does not introduce duplicate records.
+
+## Technology Stack
+
+| Technology | Role |
+|---|---|
+| Python | Data generation, ingestion, and reporting |
+| Faker | Synthetic customer and transaction data |
+| PostgreSQL 17 | Relational data storage |
+| psycopg | PostgreSQL connectivity and bulk ingestion |
+| dbt Core | SQL transformations and data quality tests |
+| Apache Airflow | Pipeline orchestration |
+| Astro CLI + Docker | Containerized local environment |
+| Pytest | Automated Python testing |
+| GitHub Actions | Continuous integration |
+| Telegram Bot API | Optional report delivery |
+| uv | Python dependency management |
+
+## Repository Structure
 
 ```text
 .
-├── .github/
-│   └── workflows/
-│       └── ci.yml
+├── .github/workflows/
+│   └── ci.yml
 ├── dags/
 │   └── ecommerce_dag.py
 ├── include/
@@ -368,31 +499,36 @@ You can also explore the models under the `analytics` schema.
 │       ├── tests/
 │       └── dbt_project.yml
 ├── tests/
-│   ├── dags/
 │   └── units/
 │       └── test_pipeline.py
 ├── Dockerfile
 ├── docker-compose.override.yml
+├── requirements.txt
 ├── pyproject.toml
-├── uv.lock
 └── README.md
 ```
 
-Generated CSV batches, virtual environments, local credentials, and dbt build artifacts are excluded from version control.
+Generated datasets, reports, dbt build artifacts, credentials, and local virtual environments are excluded from version control.
 
-## Design Trade-offs and Known Limitations
+## Design Considerations and Limitations
 
-- **Synthetic data:** Faker replaces external transactional systems, allowing the pipeline to run without commercial APIs or datasets.
-- **Batch processing:** The project focuses on scheduled batch ingestion rather than streaming.
-- **Probabilistic ID allocation:** Batch-specific IDs are derived from hashes. Primary key constraints provide the final protection against collisions.
-- **dbt materializations:** The dbt models are not currently incrementally materialized. Incrementality is implemented at the raw ingestion layer.
-- **Telegram reporting:** The DAG includes a reporting step, but the published script still expects legacy CSV paths. It must be updated to read the batch layout or query PostgreSQL for a fully reproducible fresh installation.
-- **Local infrastructure:** The main Airflow environment runs locally through Astro CLI and Docker rather than in a hosted production environment.
+This project was developed as a reproducible analytics engineering portfolio project rather than a deployed production service.
+
+Several decisions reflect that scope:
+
+- **Synthetic data:** Eliminates the need for external APIs, commercial datasets, or access to real customer information.
+- **Batch architecture:** Focuses on weekly reporting rather than real-time event streaming.
+- **Historical simulation:** Provides multiple customer activity profiles to demonstrate retention monitoring.
+- **Rule-based churn:** Uses a transparent inactivity threshold instead of a machine learning model.
+- **Local orchestration:** Uses Astro CLI and Docker rather than a hosted Airflow deployment.
+- **Incremental ingestion:** Uses PostgreSQL UPSERT operations, while dbt models remain view-based.
+- **Probabilistic identifiers:** Batch identifiers are derived from hashes; database constraints provide the final safeguard against collisions.
+
+Potential extensions include persistent analytical snapshots, cohort retention analysis, automated reactivation workflows, and integration with external transactional sources.
 
 ## Author
 
-**Ayrton Bezerra**
+**Ayrton Bezerra**  
+Data Analytics | Analytics Engineering
 
-Analytics Engineering and Data Analytics
-
-[GitHub Profile](https://github.com/ayrtonbezerra)
+[GitHub Profile](https://github.com/ayrtonbezerra) | [LinkedIn Profile](https://www.linkedin.com/in/ayrtonbezerra/)
