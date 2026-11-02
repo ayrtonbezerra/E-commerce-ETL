@@ -1,30 +1,49 @@
-WITH orders AS(
-    SELECT
-        *
-    FROM {{ref('stg_orders')}}
-),
 
-aggregated_orders AS (
-    SELECT
-        customer_id,
-        COUNT(*) as total_orders,
-        MIN(order_date) as first_order,
-        MAX(ordeR_date) as last_order,
-        (MAX(order_date) - MIN(order_date)) as days_between,
-        COUNT(CASE WHEN status = 'cancelado' THEN 1 ELSE NULL END) as total_cancels
-    FROM orders
-    GROUP BY customer_id
-),
+{{ config(materialized='view') }}
 
-churned_flag AS (
+WITH customer_activity AS (
+
     SELECT
-        *,
-        CASE 
-            WHEN (CURRENT_DATE - last_order) > 90 THEN 1 ELSE 0
-        END AS is_churn
-    FROM aggregated_orders 
+        c.id AS customer_id,
+
+        COUNT(o.order_id) FILTER (
+            WHERE o.status = 'completo'
+        ) AS total_orders,
+
+        MIN(o.order_date) FILTER (
+            WHERE o.status = 'completo'
+        ) AS first_order,
+
+        MAX(o.order_date) FILTER (
+            WHERE o.status = 'completo'
+        ) AS last_order,
+
+        COUNT(o.order_id) FILTER (
+            WHERE o.status = 'cancelado'
+        ) AS total_cancels
+
+    FROM {{ ref('stg_customers') }} c
+
+    LEFT JOIN {{ ref('stg_orders') }} o
+        ON c.id = o.customer_id
+
+    GROUP BY c.id
+
 )
 
 SELECT
-    *
-FROM churned_flag
+    customer_id,
+    total_orders,
+    first_order,
+    last_order,
+    last_order - first_order AS days_between,
+    total_cancels,
+
+    CASE
+        WHEN last_order IS NOT NULL
+         AND CURRENT_DATE - last_order > 90
+        THEN 1
+        ELSE 0
+    END AS is_churn
+
+FROM customer_activity

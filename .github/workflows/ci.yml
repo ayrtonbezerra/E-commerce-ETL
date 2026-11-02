@@ -84,6 +84,22 @@ jobs:
           uv run --no-sync dbt debug \
             --project-dir include/dbt_ecommerce \
             --profiles-dir "$RUNNER_TEMP/dbt_profiles"
+  
+      - name: Generate historical data
+        run: |
+          uv run --no-sync python \
+            include/scripts/generate_fake_data.py \
+            --run-id "historical-bootstrap-v1" \
+            --run-date "2026-11-01" \
+            --mode history
+
+      - name: Load historical data
+        run: |
+          for table in customers products orders order_items cancelamentos; do
+            uv run --no-sync python \
+              include/scripts/load_data.py "$table" \
+              --run-id "historical-bootstrap-v1"
+          done
 
       - name: Generate sample data
         run: |
@@ -111,3 +127,9 @@ jobs:
           uv run --no-sync dbt test \
             --project-dir include/dbt_ecommerce \
             --profiles-dir "$RUNNER_TEMP/dbt_profiles"
+      
+      - name: Generate retention report
+        run: |
+          uv run --no-sync python \
+            include/scripts/generate_report.py \
+            --run-id "ci-batch"

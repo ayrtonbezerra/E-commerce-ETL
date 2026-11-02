@@ -162,3 +162,40 @@ def test_ingestao_rejeita_csv_com_cabecalho_invalido(
         ingestion.load_table("orders", run_id)
 
     conectar.assert_not_called()
+
+def test_historical_batch_has_retention_segments(dados_teste):
+    run_date = date(2026, 11, 1)
+
+    pasta = generator.generate_batch(
+        "pytest_history",
+        run_date,
+        mode="history",
+    )
+
+    orders = ler_csv(pasta, "orders")
+    customers = ler_csv(pasta, "customers")
+
+    last_purchase = {}
+
+    for order in orders:
+        if order["status"] != "completo":
+            continue
+
+        customer_id = order["customer_id"]
+        order_date = date.fromisoformat(order["order_date"])
+
+        if (
+            customer_id not in last_purchase
+            or order_date > last_purchase[customer_id]
+        ):
+            last_purchase[customer_id] = order_date
+
+    inactive_days = [
+        (run_date - last_purchase[c["id"]]).days
+        for c in customers
+    ]
+
+    assert all(int(c["id"]) >= 1_000_001 for c in customers)
+    assert any(days <= 60 for days in inactive_days)
+    assert any(61 <= days <= 90 for days in inactive_days)
+    assert any(days > 90 for days in inactive_days)

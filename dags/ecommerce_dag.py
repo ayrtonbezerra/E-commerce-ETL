@@ -11,7 +11,42 @@ SCRIPT_PATH = os.environ["SCRIPT_PATH"]
 DBT_PROJECT_DIR = os.environ["DBT_PROJECT_DIR"]
 DBT_PROFILES_DIR = os.environ["DBT_PROFILES_DIR"]
 DBT_BIN = "/usr/local/airflow/dbt_venv/bin/dbt"
+HISTORY_RUN_ID = "historical-bootstrap-v1"
 
+DATA_TABLES = (
+    "customers",
+    "products",
+    "orders",
+    "order_items",
+    "cancelamentos",
+)
+
+def bootstrap_history(**context):
+    """Create and ingest the historical sample idempotently."""
+
+    run_date = context["ds"]
+
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(SCRIPT_PATH, "generate_fake_data.py"),
+            "--run-id", HISTORY_RUN_ID,
+            "--run-date", run_date,
+            "--mode", "history",
+        ],
+        check=True,
+    )
+
+    for table in DATA_TABLES:
+        subprocess.run(
+            [
+                sys.executable,
+                os.path.join(SCRIPT_PATH, "load_data.py"),
+                table,
+                "--run-id", HISTORY_RUN_ID,
+            ],
+            check=True,
+        )
 
 def generate_data(**context):
     subprocess.run(
@@ -45,6 +80,18 @@ def dbt_command(subcommand: str) -> str:
     )
 
 
+def run_report(**context):
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(SCRIPT_PATH, "generate_report.py"),
+            "--run-id",
+            context["run_id"],
+        ],
+        check=True,
+    )
+
+
 default_args = {
     "owner": "Ayrton",
     "retries": 1,
@@ -71,12 +118,11 @@ with DAG(
     ]
     t_dbt_run = BashOperator(task_id="dbt_run", bash_command=dbt_command("run"))
     t_dbt_test = BashOperator(task_id="dbt_test", bash_command=dbt_command("test"))
-    t_report = BashOperator(
-        task_id="generate_report",
-        bash_command=f'python "{os.path.join(SCRIPT_PATH, "generate_report.py")}"',
-    )
+    t_report = PythonOperator(task_id="generate_report", python_callable=run_report)
+    t_bootstrap = PythonOperator(task_id="bootstrap_history", python_callable=bootstrap_history)
 
-    previous = t_generate
+
+    previous = t_bootstrap >> t_generate
     for task in loads:
         previous >> task
         previous = task
