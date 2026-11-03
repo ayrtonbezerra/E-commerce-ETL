@@ -34,9 +34,6 @@ The solution covers the full analytics lifecycle, from data ingestion and transf
 
 ## Architecture
 
-
-## Architecture
-
 ```mermaid
 flowchart TB
     subgraph AIRFLOW["Apache Airflow — Pipeline Orchestration"]
